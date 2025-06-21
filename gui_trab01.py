@@ -1,11 +1,12 @@
 import sys
 import matplotlib.pyplot as plt
+import numpy as np
 from PyQt5.QtWidgets import QApplication, QMainWindow, QGridLayout, QLabel, QWidget, QLineEdit, QHBoxLayout, QVBoxLayout, QPushButton,QGroupBox
 from PyQt5.QtGui import QDoubleValidator
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from mpl_toolkits.mplot3d import Axes3D
 from numpy import array
-
+from stl import mesh
 
 ###### Crie suas funções de translação, rotação, criação de referenciais, plotagem de setas e qualquer outra função que precisar
 
@@ -23,8 +24,8 @@ class MainWindow(QMainWindow):
     def set_variables(self):
         self.objeto_original = [] #modificar
         self.objeto = self.objeto_original
-        self.cam_original = [] #modificar
-        self.cam = [] #modificar
+        self.cam_original = np.array([[1,0,0,0], [0,1,0,0], [0,0,1,0], [0,0,0,1]]) #modificar
+        self.cam = self.cam_original #modificar
         self.px_base = 1280  #modificar
         self.px_altura = 720 #modificar
         self.dist_foc = 50 #modificar
@@ -41,7 +42,7 @@ class MainWindow(QMainWindow):
         # Criar os widgets
         line_edit_widget1 = self.create_world_widget("Ref mundo")
         line_edit_widget2  = self.create_cam_widget("Ref camera")
-        line_edit_widget3  = self.create_intrinsic_widget("params instr")
+        line_edit_widget3  = self.create_intrinsic_widget("Params instr")
 
         self.canvas = self.create_matplotlib_canvas()
 
@@ -51,7 +52,7 @@ class MainWindow(QMainWindow):
         grid_layout.addWidget(line_edit_widget3, 0, 2)
         grid_layout.addWidget(self.canvas, 1, 0, 1, 3)
 
-          # Criar um widget para agrupar o botão de reset
+        # Criar um widget para agrupar o botão de reset
         reset_widget = QWidget()
         reset_layout = QHBoxLayout()
         reset_widget.setLayout(reset_layout)
@@ -204,9 +205,11 @@ class MainWindow(QMainWindow):
         self.canvas1 = FigureCanvas(self.fig1)
 
         ##### Falta acertar os limites do eixo X
+        self.ax1.set_xlim([0,self.px_base])
         
         ##### Falta acertar os limites do eixo Y
-        
+        self.ax1.set_ylim([self.px_altura,0])
+
         ##### Você deverá criar a função de projeção 
         object_2d = self.projection_2d()
 
@@ -219,27 +222,137 @@ class MainWindow(QMainWindow):
         # Criar um objeto FigureCanvas para exibir o gráfico 3D
         self.fig2 = plt.figure()
         self.ax2 = self.fig2.add_subplot(111, projection='3d')
-        
+
+        # Configurando o eixo 3D
+        lim_inf = -30
+        lim_sup = 30
+
+        self.ax2.set_xlim([lim_inf,lim_sup])
+        self.ax2.set_ylim([lim_inf,lim_sup])
+        self.ax2.set_zlim([-10,lim_sup])
+
         ##### Falta plotar o seu objeto 3D e os referenciais da câmera e do mundo
-        
+
+        # base vector values
+        base = np.array([
+                        [1, 0, 0],  # eixo X
+                        [0, 1, 0],  # eixo Y
+                        [0, 0, 1],  # eixo Z
+                        [0, 0, 0]   # coordenada homogênea
+                    ]) 
+
+        # origin point
+        origin = np.array([[0],[0],[0],[1]])
+
+        # Plot do referencial do mundo
+        self.plotWorld(origin, base)
+
+        # Plot da câmera 
+        self.plotCam(origin, base)
+
+        # Plot do objeto 3D
+        self.plot3DObj()
+
+        ## -------
         self.canvas2 = FigureCanvas(self.fig2)
         canvas_layout.addWidget(self.canvas2)
 
         # Retornar o widget de canvas
         return canvas_widget
 
-
     ##### Você deverá criar as suas funções aqui
     
     def update_params_intrinsc(self, line_edits):
+        try:
+            ccd = [0,0]
+
+            px_base = MainWindow.convert_value(line_edits[0].text())  
+            px_altura = MainWindow.convert_value(line_edits[1].text())  
+            ccd[0] = MainWindow.convert_value(line_edits[2].text())  
+            ccd[1] = MainWindow.convert_value(line_edits[3].text())  
+            f = MainWindow.convert_value(line_edits[4].text())  
+            Oh = MainWindow.convert_value(line_edits[5].text())  
+
+            Ox = px_base/2
+            Oy = px_base/2
+
+            Sx = px_base/ccd[0]
+            Sy = px_altura/ccd[1]
+            
+            M_intrinsics = np.array([[f*Sx, f*Oh, Ox],
+                                     [   0, f*Sy, Oy],
+                                     [   0,    0,  1]])
+            
+            print(M_intrinsics)
+
+            #atualiza a projeção 
+
+            # Limpa as caixas de texto depois de atualizar o valor
+            for edit in line_edits:
+                edit.clear()
+
+        except Exception as e:
+            print("Erro ao atualizar parametros intrinsecos:", e)
+
         return 
 
     def update_world(self,line_edits):
+        try:
+            # atualiza as translacoes
+            tx = MainWindow.convert_value(line_edits[0].text())
+            ty = MainWindow.convert_value(line_edits[2].text())
+            tz = MainWindow.convert_value(line_edits[4].text())
+
+            Tx = MainWindow.x_translate(tx)
+            Ty = MainWindow.y_translate(ty)
+            Tz = MainWindow.z_translate(tz)
+
+            T = Tz@Ty@Tx
+            
+            # atualiza as rotações
+            rx = MainWindow.convert_value(line_edits[1].text())
+            ry = MainWindow.convert_value(line_edits[3].text())
+            rz = MainWindow.convert_value(line_edits[5].text())
+            
+            Rx = MainWindow.x_rotate(rx)
+            Ry = MainWindow.y_rotate(ry)
+            Rz = MainWindow.z_rotate(rz)
+
+            R = Rz@Ry@Rx
+
+            # multiplica as transformações pela camera
+            self.cam = T@R@(self.cam)
+
+            print("Nova matriz mundo->camera:")
+            print(self.cam)
+
+            self.draw_arrows(self.cam[:,-1], self.cam[:,0:3], self.ax2,3)
+
+        except Exception as e:
+            print("Erro ao atualizar mundo->camera:", e)    
+        
+        # Limpa as caixas de texto depois de atualizar o valor
+        for edit in line_edits:
+            edit.clear()
+        
+
         return
 
     def update_cam(self,line_edits):
+        
+        
+        # Limpa as caixas de texto depois de atualizar o valor
+        for edit in line_edits:
+            edit.clear()
+        
         return 
-    
+
+    @staticmethod
+    def convert_value(text):
+        if text == "": return float(0)
+        return float(text)
+        
+
     def projection_2d(self):
         return 
     
@@ -253,6 +366,77 @@ class MainWindow(QMainWindow):
     def reset_canvas(self):
         return
     
+    # função emprestada do material da professora
+    def draw_arrows(self, point,base,axis,length=0.5):
+        # Plot vector of x-axis
+        axis.quiver(point[0],point[1],point[2],base[0,0],base[1,0],base[2,0],color='red',pivot='tail',  length=length)
+        # Plot vector of y-axis
+        axis.quiver(point[0],point[1],point[2],base[0,1],base[1,1],base[2,1],color='green',pivot='tail',  length=length)
+        # Plot vector of z-axis
+        axis.quiver(point[0],point[1],point[2],base[0,2],base[1,2],base[2,2],color='blue',pivot='tail',  length=length)
+        return 
+    
+    def plot3DObj(self):
+        # Objeto 3D 
+        pokemon = mesh.Mesh.from_file('models/poliwag.stl')
+
+        # Transforma as coordenadas
+        x = pokemon.x.flatten()
+        y = pokemon.y.flatten()
+        z = pokemon.z.flatten()
+
+        # Esse é o objeto 3d em coordenadas homogeneas
+        pokemon = np.array([x.T, y.T, z.T, np.ones(x.size)])
+
+        # aumentar a escala do objeto
+        M = np.array([[5, 0, 0, 1], [0, 5, 0, 1], [0, 0, 5, 1], [1,1,1,1]])
+
+        pokemon = M@pokemon
+
+        # Plotando os pontos e desenhando as linhas
+        self.ax2.plot(pokemon[0,:],pokemon[1,:],pokemon[2,:],'r')
+        return
+    
+    def plotWorld(self, origin, base):
+        self.draw_arrows(origin,base,self.ax2)
+        return 
+    
+    def plotCam(self, origin, base):
+        cam = np.hstack((base,origin))
+        self.draw_arrows(cam[:,-1],cam[:,0:3], self.ax2,3)
+        return
+
+    # Funções de rotação
+    
+    @staticmethod
+    def x_rotate(angle):
+        return np.array([[np.cos(angle),-np.sin(angle),0,0],[np.sin(angle),np.cos(angle),0,0],[0,0,1,0],[0,0,0,1]])
+
+    def y_rotate(angle):
+        return np.array([[1,0,0,0],[0, np.cos(angle),-np.sin(angle),0],[0, np.sin(angle), np.cos(angle),0],[0,0,0,1]])
+
+    def z_rotate(angle):
+        return np.array([[np.cos(angle),0, np.sin(angle),0],[0,1,0,0],[-np.sin(angle), 0, np.cos(angle),0],[0,0,0,1]])
+
+    # Funções de translação
+ 
+    @staticmethod
+    def x_translate(value):
+        return np.array([[1,0,0,value],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
+    
+    @staticmethod
+    def y_translate(value):
+        return np.array([[1,0,0,0],[0,1,0,value],[0,0,1,0],[0,0,0,1]])
+    
+    @staticmethod
+    def z_translate(value):
+        return np.array([[1,0,0,0],[0,1,0,0],[0,0,1,value],[0,0,0,1]])
+
+    @staticmethod
+    def translate(x,y,z):
+        return np.array([[1,0,0,x],[0,1,0,y],[0,0,1,z],[0,0,0,1]])
+    
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     main_window = MainWindow()
