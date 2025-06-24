@@ -9,6 +9,135 @@ from numpy import array
 from stl import mesh
 
 ###### Crie suas funções de translação, rotação, criação de referenciais, plotagem de setas e qualquer outra função que precisar
+# Função para ajustar o eixo de coordenadas do objeto 3D em relação à mudança de posição ou orientação da câmera
+def set_view_object_cam(ax):
+
+    x_lim= ax.get_xlim3d()
+    y_lim = ax.get_ylim3d()
+    z_lim = ax.get_zlim3d()
+
+    x_ran = abs(np.diff(x_lim))
+    x_mean = np.mean(x_lim)
+    y_ran = abs(np.diff(y_lim))
+    y_mean = np.mean(y_lim)
+    z_ran = abs(np.diff(z_lim))
+    z_mean = np.mean(z_lim)
+
+    plot_radius = 0.4*max([x_ran, y_ran, z_ran])
+
+    ax.set_xlim3d([x_mean - plot_radius, x_mean + plot_radius])
+    ax.set_ylim3d([y_mean - plot_radius, y_mean + plot_radius])
+    ax.set_zlim3d([z_mean - plot_radius, z_mean + plot_radius])
+
+# funçõe de criação de Objeto 3D
+def defineObj():
+    # Objeto 3D 
+    pokemon = mesh.Mesh.from_file('models/poliwag.stl')
+
+    # Transforma as coordenadas
+    x = pokemon.x.flatten()
+    y = pokemon.y.flatten()
+    z = pokemon.z.flatten()
+
+    # Esse é o objeto 3D em coordenadas homogeneas
+    pokemon = np.array([x.T, y.T, z.T, np.ones(x.size)])
+
+    # Ajustar o obj inicial
+    M = np.array([[4, 0, 0, 0], [0, 4, 0, 0], [0, 0, 4, 0], [0,0,0,1]])
+    
+    R = z_rotate(20)
+
+    R = y_rotate(20)@ R
+    
+    pokemon = R@pokemon
+
+    pokemon = M@pokemon
+
+    return pokemon
+
+# Funçõe pra convertir valor de interface
+def convert_value(text):
+    if text == "": return float(0)
+    return float(text)
+
+# Funções de rotação
+def x_rotate(angle_x):
+    return np.array([[1,0,0,0],
+                        [0, np.cos(np.deg2rad(angle_x)),-np.sin(np.deg2rad(angle_x)),0],
+                        [0, np.sin(np.deg2rad(angle_x)), np.cos(np.deg2rad(angle_x)),0],
+                        [0,0,0,1]])
+def y_rotate(angle_y):
+    return np.array([[np.cos(np.deg2rad(angle_y)),0, np.sin(np.deg2rad(angle_y)),0],
+                        [0,1,0,0],
+                        [-np.sin(np.deg2rad(angle_y)), 0, np.cos(np.deg2rad(angle_y)),0],
+                        [0,0,0,1]])
+def z_rotate(angle_z):
+    return np.array([[np.cos(np.deg2rad(angle_z)),-np.sin(np.deg2rad(angle_z)),0,0],
+                        [np.sin(np.deg2rad(angle_z)),np.cos(np.deg2rad(angle_z)),0,0],
+                        [0,0,1,0],
+                        [0,0,0,1]])
+
+def x_rotate_cam(xangle, M_x):
+    M_inv = np.linalg.inv(M_x)
+    cam_orig = np.dot(M_inv, M_x)
+    Rx = np.array([[1,0,0,0],
+                [0, np.cos(np.deg2rad(xangle)),-np.sin(np.deg2rad(xangle)),0],
+                [0, np.sin(np.deg2rad(xangle)), np.cos(np.deg2rad(xangle)),0],
+                [0,0,0,1]])
+    M_RxO = Rx@cam_orig
+    M_Rx = M_x@M_RxO
+    return M_Rx
+    
+def y_rotate_cam(yangle, M_y):
+    M_inv = np.linalg.inv(M_y)
+    cam_orig = np.dot(M_inv, M_y)
+    Ry = np.array([[np.cos(np.deg2rad(yangle)),0, np.sin(np.deg2rad(yangle)),0],
+                    [0,1,0,0],
+                    [-np.sin(np.deg2rad(yangle)), 0, np.cos(np.deg2rad(yangle)),0],
+                    [0,0,0,1]])
+    M_RyO = cam_orig@Ry
+    M_Ry = M_y@M_RyO
+    return M_Ry
+    
+def z_rotate_cam(zangle, M_z):
+    M_inv = np.linalg.inv(M_z)
+    cam_orig = np.dot(M_inv, M_z)
+    Rz = np.array([[np.cos(np.deg2rad(zangle)),-np.sin(np.deg2rad(zangle)),0,0],
+                    [np.sin(np.deg2rad(zangle)),np.cos(np.deg2rad(zangle)),0,0],
+                    [0,0,1,0],
+                    [0,0,0,1]])
+    M_RzO = cam_orig@Rz
+    M_Rz = M_z@M_RzO
+    return M_Rz
+
+# Funções de translação
+def translate(x,y,z):
+    return np.array([[1,0,0,x],
+                        [0,1,0,y],
+                        [0,0,1,z],
+                        [0,0,0,1]])
+    
+
+def translate_cam(x,y,z, M_T):
+    M_inv_T = np.linalg.inv(M_T)
+    cam_orig = np.dot(M_inv_T, M_T)
+    T = np.array([[1,0,0,x],
+                    [0,1,0,y],
+                    [0,0,1,z],
+                    [0,0,0,1]])
+    M_TO = cam_orig@T
+    M_acc = M_T@M_TO
+    return M_acc
+
+# função emprestada do material da professora
+def draw_arrows(point,base,axis,length=0.5):
+    # Plot vector of x-axis
+    qx = axis.quiver(point[0],point[1],point[2],base[0,0],base[1,0],base[2,0],color='red',pivot='tail',  length=length)
+    # Plot vector of y-axis
+    qy = axis.quiver(point[0],point[1],point[2],base[0,1],base[1,1],base[2,1],color='green',pivot='tail',  length=length)
+    # Plot vector of z-axis
+    qz = axis.quiver(point[0],point[1],point[2],base[0,2],base[1,2],base[2,2],color='blue',pivot='tail',  length=length)
+    return [qx, qy, qz]
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -22,17 +151,20 @@ class MainWindow(QMainWindow):
         self.setup_ui()
 
     def set_variables(self):
-        self.objeto_original = self.defineObj() 
+        self.objeto_original = defineObj() 
         self.objeto = self.objeto_original
         self.cam_original = np.array([[1,0,0,0],
                                       [0,1,0,0],
                                       [0,0,1,0], 
-                                      [0,0,0,1]]) 
-        self.cam = self.cam_original 
+                                      [0,0,0,1]])
+        T1 = translate(30,-10,2)
+        R1 = x_rotate(-90)
+        R2 = z_rotate(90)
+        self.cam = T1 @ R2 @ R1 @ self.cam_original
         self.cam_quivers = [] # ajustar
         self.px_base = 1280  
         self.px_altura = 720 
-        self.dist_foc = 50 
+        self.dist_foc = 35 
         self.stheta = 0 
         self.ccd = [36,24] 
         self.projection_matrix = np.array([[1,0,0,0], 
@@ -77,8 +209,8 @@ class MainWindow(QMainWindow):
             }
         """
         reset_button.setStyleSheet(style_sheet)
-        #reset_button.clicked.connect(self.reset_canvas)
-        reset_button.clicked.connect(lambda: self.reset_canvas)
+        reset_button.clicked.connect(self.reset_canvas)
+        #reset_button.clicked.connect(lambda: self.reset_canvas)
 
 
         # Adicionar o botão de reset ao layout
@@ -158,7 +290,6 @@ class MainWindow(QMainWindow):
         ##### Você deverá criar, no espaço reservado ao final, a função self.update_world ou outra que você queira 
         # Conectar a função de atualização aos sinais de clique do botão
         update_button.clicked.connect(lambda: self.update_world(line_edits))
-
         # Adicionar os widgets ao layout do widget line_edit_widget
         line_edit_layout.addLayout(grid_layout)
         line_edit_layout.addWidget(update_button)
@@ -223,14 +354,30 @@ class MainWindow(QMainWindow):
         object_2d = self.projection_2d()
 
         ##### Falta plotar o object_2d que retornou da projeção
-          
+
         self.ax1.grid('True')
         self.ax1.set_aspect('equal')  
+        self.ax1.plot(object_2d[0,:],object_2d[1,:])
+        
         canvas_layout.addWidget(self.canvas1)
 
         # Criar um objeto FigureCanvas para exibir o gráfico 3D
         self.fig2 = plt.figure()
         self.ax2 = self.fig2.add_subplot(111, projection='3d')
+        
+        ##### Falta plotar o seu objeto 3D e os referenciais da câmera e do mundo
+
+        # Plot do referencial do mundo
+        self.plotWorld()
+
+        # Plot da câmera 
+        self.plotCam()
+
+        # Plot do objeto 3D
+        self.plotObj()
+
+        # Configurando o eixo 3D
+        #set_view_object_cam(self.ax2)
 
         # Configurando o eixo 3D
         lower_lim = -30
@@ -243,51 +390,12 @@ class MainWindow(QMainWindow):
         self.canvas2 = FigureCanvas(self.fig2)
         canvas_layout.addWidget(self.canvas2)
 
-        ##### Falta plotar o seu objeto 3D e os referenciais da câmera e do mundo
-
-        # Plot do referencial do mundo
-        self.plotWorld()
-        
-        # Plot da câmera 
-        self.plotCam()
-
-        # Plot do objeto 3D
-        self.plotObj()
 
         # Retornar o widget de canvas
         return canvas_widget
 
     ##### Você deverá criar as suas funções aqui
     
-    # função emprestada do material da professora
-    def draw_arrows(self, point,base,axis,length=0.5):
-        # Plot vector of x-axis
-        qx = axis.quiver(point[0],point[1],point[2],base[0,0],base[1,0],base[2,0],color='red',pivot='tail',  length=length)
-        # Plot vector of y-axis
-        qy = axis.quiver(point[0],point[1],point[2],base[0,1],base[1,1],base[2,1],color='green',pivot='tail',  length=length)
-        # Plot vector of z-axis
-        qz = axis.quiver(point[0],point[1],point[2],base[0,2],base[1,2],base[2,2],color='blue',pivot='tail',  length=length)
-        return [qx, qy, qz]
-    
-    def defineObj(self):
-        # Objeto 3D 
-        pokemon = mesh.Mesh.from_file('models/poliwag.stl')
-
-        # Transforma as coordenadas
-        x = pokemon.x.flatten()
-        y = pokemon.y.flatten()
-        z = pokemon.z.flatten()
-
-        # Esse é o objeto 3D em coordenadas homogeneas
-        pokemon = np.array([x.T, y.T, z.T, np.ones(x.size)])
-
-        # aumentar a escala do objeto para ajustar o plot inicial
-        M = np.array([[5, 0, 0, 1], [0, 5, 0, 1], [0, 0, 5, 1], [1,1,1,1]])
-
-        pokemon = M@pokemon
-
-        return pokemon
-
     def plotObj(self):
         # Plotando os pontos e desenhando as linhas
         self.ax2.plot(self.objeto[0,:],self.objeto[1,:],self.objeto[2,:],'r')
@@ -305,34 +413,39 @@ class MainWindow(QMainWindow):
         # origin point
         origin = np.array([[0],[0],[0],[1]])
 
-        self.draw_arrows(origin,base,self.ax2)
+        draw_arrows(origin,base,self.ax2,3)
+
         return 
     
     def plotCam(self):
-        # Remove as projeções antigas no gráfico
-        if len(self.cam_quivers) > 0:
-            for q in self.cam_quivers:
-                q.remove()
-            self.cam_quivers.clear()
+        draw_arrows(self.cam[:, -1], self.cam[:, 0:3], self.ax2,3)
 
-        # Desenha a nova câmera
-        cam_quiver = self.draw_arrows(self.cam[:, -1], self.cam[:, 0:3], self.ax2, 3)
-
-        # Armazena o novo quiver criado na lista
-        self.cam_quivers.extend(cam_quiver)
 
         return
 
-
     def update_params_intrinsc(self, line_edits):
         try:
-            self.px_base = MainWindow.convert_value(line_edits[0].text())  
-            self.px_altura = MainWindow.convert_value(line_edits[1].text())  
-            self.ccd[0] = MainWindow.convert_value(line_edits[2].text())  
-            self.ccd[1] = MainWindow.convert_value(line_edits[3].text())  
-            self.dist_foc = MainWindow.convert_value(line_edits[4].text())  
-            self.stheta = MainWindow.convert_value(line_edits[5].text())  
 
+            if line_edits[0].text() != '': 
+                self.px_base = float(line_edits[0].text())
+
+            if line_edits[1].text() != '': 
+                self.px_altura = float(line_edits[1].text())
+            
+            if line_edits[2].text() != '': 
+                self.ccd[0] = float(line_edits[2].text())
+            
+            if line_edits[3].text() != '':
+                self.ccd[1] = float(line_edits[3].text())
+            
+            if line_edits[4].text() != '':
+                self.dist_foc = float(line_edits[4].text())
+            
+            if line_edits[5].text() != '':
+                self.stheta = float(line_edits[5].text())
+            
+            
+            self.update_canvas()
             #atualiza a projeção 
 
             # Limpa as caixas de texto depois de atualizar o valor
@@ -347,47 +460,54 @@ class MainWindow(QMainWindow):
     def update_world(self,line_edits):
         try:
             # atualiza as translacoes
-            tx = MainWindow.convert_value(line_edits[0].text())
-            ty = MainWindow.convert_value(line_edits[2].text())
-            tz = MainWindow.convert_value(line_edits[4].text())
-
-            Tx = MainWindow.x_translate(tx)
-            Ty = MainWindow.y_translate(ty)
-            Tz = MainWindow.z_translate(tz)
-
-            T = Tz@Ty@Tx
+            tx = convert_value(line_edits[0].text())
+            ty = convert_value(line_edits[2].text())
+            tz = convert_value(line_edits[4].text())
+            T = translate(tx, ty, tz)
             
             # atualiza as rotações
-            rx = MainWindow.convert_value(line_edits[1].text())
-            ry = MainWindow.convert_value(line_edits[3].text())
-            rz = MainWindow.convert_value(line_edits[5].text())
-            
-            Rx = MainWindow.x_rotate(rx)
-            Ry = MainWindow.y_rotate(ry)
-            Rz = MainWindow.z_rotate(rz)
+            rx = convert_value(line_edits[1].text())
+            ry = convert_value(line_edits[3].text())
+            rz = convert_value(line_edits[5].text())
 
+            Rx = x_rotate(rx)
+            Ry = y_rotate(ry)
+            Rz = z_rotate(rz)
             R = Rz@Ry@Rx
-
+            
             # multiplica as transformações pela camera
             self.cam = T@R@(self.cam)
-            
             # arredondamento para limpar a impressão da matiz, escondendo os erros muito pequenos (e-16)
-            self.cam = np.round(self.cam, decimals=6)
-
-            self.plotCam()
-
+            #self.cam = np.round(self.cam, decimals=6)
+            self.update_canvas() 
         except Exception as e:
             print("Erro ao atualizar matriz mundo->camera:", e)      
 
         # Limpa as caixas de texto depois de atualizar o valor
         for edit in line_edits:
-            edit.clear()      
-
+            edit.clear()     
         return
 
     def update_cam(self,line_edits):
+
+        tx = convert_value(line_edits[0].text())
+        ty = convert_value(line_edits[2].text())
+        tz = convert_value(line_edits[4].text())
+        self.cam = translate_cam(tx, ty, tz, self.cam)
         
-        
+        rx = convert_value(line_edits[1].text())
+        self.cam = x_rotate_cam(rx, self.cam)
+        ry = convert_value(line_edits[3].text())
+        self.cam = y_rotate_cam(ry, self.cam)
+
+        rz = convert_value(line_edits[5].text())
+        self.cam = z_rotate_cam(rz, self.cam)
+
+        # Arredondamento para limpar a impressão da matriz
+        self.cam = np.round(self.cam, decimals=6)
+
+        self.update_canvas() 
+
         # Limpa as caixas de texto depois de atualizar o valor
         for edit in line_edits:
             edit.clear()
@@ -396,7 +516,26 @@ class MainWindow(QMainWindow):
 
         
     def projection_2d(self):  
+        M_intrinsics = self.generate_intrinsic_params_matrix()
+        M_projection = self.projection_matrix
+        M_extrinsics = np.linalg.inv(self.cam)
+        M = M_intrinsics @ M_projection @ M_extrinsics
 
+        # Coordenadas do objeto no sistema da câmera
+        obj_cam = M_extrinsics @ self.objeto
+
+        # Faz uma máscara para verificar se o objeto está visivel
+        mask = obj_cam[2, :] > 0
+        obj_visible = self.objeto[:, mask]
+
+        if obj_visible.shape[1] == 0:
+            return np.zeros((3, 0))
+
+        obj_projection = M @ obj_visible
+        obj_projection = obj_projection / obj_projection[2, :]
+        return obj_projection
+    
+    def generate_intrinsic_params_matrix(self):
         # Matriz intrínseca
         Ox = self.px_base/2
         Oy = self.px_base/2
@@ -408,100 +547,44 @@ class MainWindow(QMainWindow):
         Oh = self.stheta
 
         M_intrinsics = np.array([[f*Sx, f*Oh, Ox],
-                                    [   0, f*Sy, Oy],
-                                    [   0,    0,  1]])
-        
-
-        # Matriz de projecao
-        M_projection = self.projection_matrix
-
-        # Matriz extrinseca
-        M_extrinsics = self.cam
-
-        M = M_intrinsics@M_projection@M_extrinsics
-        
-        # Multiplica pelo objeto para obter a projecao 2D dele
-
-        obj_projection = M@self.objeto
-
-        # Falta plotar no gráfico
-
-        return 
-    
-    def generate_intrinsic_params_matrix(self):
-        return 
+                                 [   0, f*Sy, Oy],
+                                 [   0,    0,  1]])
+                
+        return M_intrinsics
     
     def update_canvas(self):
+        # Limpa o que estava anteriormente em ax1
+        self.ax1.cla()
+        self.ax1.set_title("Imagem")
+
+        object_2d = self.projection_2d()
+        self.ax1.set_ylim([self.px_altura,0])
+        self.ax1.set_xlim([0,self.px_base])
+        self.ax1.plot(object_2d[0,:],object_2d[1,:])
+        
+        self.fig1.canvas.draw_idle()
+        self.fig1.canvas.flush_events()
+        
+        
+        self.ax2.cla()
+        self.ax2.set_title("Objeto")  
+        # Plot do referencial do mundo
+        self.plotWorld()
+        # Plot da câmera 
+        self.plotCam()
+        # Plot do objeto 3D
+        self.plotObj()
+        # Configurando o eixo 3D
+        set_view_object_cam(self.ax2)
+        self.fig2.canvas.draw_idle()
+        self.fig2.canvas.flush_events()
         return 
-    
+
     def reset_canvas(self):
         # volta as variáveis para o valor original
-        self.objeto_original = self.plotObj() 
-        self.objeto = self.objeto_original
-        self.cam_original = np.array([[1,0,0,0],
-                                      [0,1,0,0],
-                                      [0,0,1,0], 
-                                      [0,0,0,1]]) 
-        self.cam = self.cam_original 
-        self.px_base = 1280  
-        self.px_altura = 720 
-        self.dist_foc = 50 
-        self.stheta = 0 
-        self.ox = self.px_base/2 
-        self.oy = self.px_altura/2 
-        self.ccd = [36,24] 
-        self.projection_matrix = np.array([[1,0,0,0], 
-                                           [0,1,0,0], 
-                                           [0,0,1,0]])
-        
-        # Limpa o eixo 3D
-        self.ax2.cla()  
-
-        # Limpa o eixo 2D
-        self.ax1.cla() 
-
-        # plota novamente o grafico
-        
-        self.plotObj()
-        self.plotCam()
-
+        self.set_variables()
+        self.update_canvas()
         return
-
-    # função para converter o input de texto para número
-    @staticmethod
-    def convert_value(text):
-        if text == "": return float(0)
-        return float(text)
-
-    # Funções de rotação
-    
-    @staticmethod
-    def x_rotate(angle):
-        return np.array([[1,0,0,0],[0, np.cos(np.deg2rad(angle)),-np.sin(np.deg2rad(angle)),0],[0, np.sin(np.deg2rad(angle)), np.cos(np.deg2rad(angle)),0],[0,0,0,1]])
-
-    def y_rotate(angle):
-        return np.array([[np.cos(np.deg2rad(angle)),0, np.sin(np.deg2rad(angle)),0],[0,1,0,0],[-np.sin(np.deg2rad(angle)), 0, np.cos(np.deg2rad(angle)),0],[0,0,0,1]])
-
-    def z_rotate(angle):
-        return np.array([[np.cos(np.deg2rad(angle)),-np.sin(np.deg2rad(angle)),0,0],[np.sin(np.deg2rad(angle)),np.cos(np.deg2rad(angle)),0,0],[0,0,1,0],[0,0,0,1]])
-
-    # Funções de translação
- 
-    @staticmethod
-    def x_translate(value):
-        return np.array([[1,0,0,value],[0,1,0,0],[0,0,1,0],[0,0,0,1]])
-    
-    @staticmethod
-    def y_translate(value):
-        return np.array([[1,0,0,0],[0,1,0,value],[0,0,1,0],[0,0,0,1]])
-    
-    @staticmethod
-    def z_translate(value):
-        return np.array([[1,0,0,0],[0,1,0,0],[0,0,1,value],[0,0,0,1]])
-
-    @staticmethod
-    def translate(x,y,z):
-        return np.array([[1,0,0,x],[0,1,0,y],[0,0,1,z],[0,0,0,1]])
     
 
 if __name__ == '__main__':
