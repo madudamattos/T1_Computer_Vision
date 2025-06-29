@@ -213,6 +213,8 @@ class MainWindow(QMainWindow):
         # Criar um objeto FigureCanvas para exibir o gráfico 2D
         self.fig1, self.ax1 = plt.subplots()
         self.ax1.set_title("Imagem")
+        self.ax1.set_xlabel("X")
+        self.ax1.set_ylabel("Y")
         self.canvas1 = FigureCanvas(self.fig1)
 
         ##### Falta acertar os limites do eixo X
@@ -235,6 +237,10 @@ class MainWindow(QMainWindow):
         # Criar um objeto FigureCanvas para exibir o gráfico 3D
         self.fig2 = plt.figure()
         self.ax2 = self.fig2.add_subplot(111, projection='3d')
+
+        self.ax2.set_xlabel("X")
+        self.ax2.set_ylabel("Y")
+        self.ax2.set_zlabel("Z")
         
         ##### Falta plotar o seu objeto 3D e os referenciais da câmera e do mundo
 
@@ -436,6 +442,10 @@ class MainWindow(QMainWindow):
         
         self.ax2.cla()
         self.ax2.set_title("Objeto") 
+
+        self.ax2.set_xlabel("X")
+        self.ax2.set_ylabel("Y")
+        self.ax2.set_zlabel("Z")
 
         self.plotWorld()
         self.plotCam()
